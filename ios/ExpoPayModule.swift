@@ -1,44 +1,106 @@
 import ExpoModulesCore
+import PassKit
+
+struct PaymentMethodData: Record {
+    @Field
+    var merchantIdentifier: String
+    
+    @Field
+    var countryCode: String
+    
+    @Field
+    var currencyCode: String
+}
+
+struct DisplayItem: Record {
+    @Field
+    var label: String
+    
+    @Field
+    var amount: String
+}
+
+struct PaymentDetails: Record {
+    @Field
+    var id: String
+    
+    @Field
+    var displayItems: [DisplayItem]
+    
+    @Field
+    var total: DisplayItem
+}
 
 public class ExpoPayModule: Module {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
-  public func definition() -> ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoPay')` in JavaScript.
-    Name("ExpoPay")
-
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants([
-      "PI": Double.pi
-    ])
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
+    public func definition() -> ModuleDefinition {
+        Name("ExpoPay")
+        
+        AsyncFunction("pay") { (
+            paymentMethodData: PaymentMethodData,
+            paymentDetails: PaymentDetails,
+            promise: Promise
+        ) -> Void in
+            payPromise = promise
+            pay(paymentMethodData: paymentMethodData, paymentDetails: paymentDetails)
+        }
     }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { (value: String) in
-      // Send an event to JavaScript.
-      self.sendEvent("onChange", [
-        "value": value
-      ])
+    
+    private var expoPayDelegate = ExpoPayDelegate()
+    private func handleDismissPay() {
+        if let payPromise {
+            payPromise.resolve("dismissed")
+        }
     }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of the
-    // view definition: Prop, Events.
-    View(ExpoPayView.self) {
-      // Defines a setter for the `name` prop.
-      Prop("name") { (view: ExpoPayView, prop: String) in
-        print(prop)
-      }
+    private var payPromise: Promise? = nil
+    
+    private func pay(
+        paymentMethodData: PaymentMethodData,
+        paymentDetails: PaymentDetails
+    ) {
+        let supportedNetworks: [PKPaymentNetwork] = [
+            .amex,
+            .discover,
+            .masterCard,
+            .visa
+        ]
+        
+        var paymentSummaryItems: [PKPaymentSummaryItem] = []
+        for item in paymentDetails.displayItems {
+            paymentSummaryItems.append(PKPaymentSummaryItem(label: item.label, amount: NSDecimalNumber(string: item.amount), type: .final))
+        }
+        let total = PKPaymentSummaryItem(label: paymentDetails.total.label, amount: NSDecimalNumber(string: paymentDetails.total.amount), type: .final)
+        paymentSummaryItems.append(total)
+        
+        let paymentRequest = PKPaymentRequest()
+        paymentRequest.paymentSummaryItems = paymentSummaryItems
+        paymentRequest.merchantIdentifier = paymentMethodData.merchantIdentifier
+        paymentRequest.merchantCapabilities = .capability3DS
+        paymentRequest.countryCode = paymentMethodData.countryCode
+        paymentRequest.currencyCode = paymentMethodData.currencyCode
+        paymentRequest.supportedNetworks = supportedNetworks
+        // paymentRequest.shippingType = .
+        // paymentRequest.shippingMethods = shippingMethodCalculator()
+        // paymentRequest.requiredShippingContactFields = [.name, .postalAddress]
+        
+        let applePayController = PKPaymentAuthorizationController(paymentRequest: paymentRequest)
+        applePayController.delegate = expoPayDelegate
+        expoPayDelegate.onDismiss = {
+            self.handleDismissPay()
+        }
+        applePayController.present(completion: { isCompleted in
+            print(isCompleted)
+        })
     }
-  }
+}
+
+class ExpoPayDelegate: NSObject, PKPaymentAuthorizationControllerDelegate {
+    public var onDismiss: (() -> Void)? = nil
+    
+    func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
+        controller.dismiss {
+            if let onDismiss = self.onDismiss {
+                onDismiss()
+            }
+        }
+    }
 }

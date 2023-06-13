@@ -1,26 +1,26 @@
-import { NativeModulesProxy, EventEmitter, Subscription } from 'expo-modules-core';
+import ExpoPayModule from "./ExpoPayModule";
 
-// Import the native module. On web, it will be resolved to ExpoPay.web.ts
-// and on native platforms to ExpoPay.ts
-import ExpoPayModule from './ExpoPayModule';
-import ExpoPayView from './ExpoPayView';
-import { ChangeEventPayload, ExpoPayViewProps } from './ExpoPay.types';
-
-// Get the native constant value.
-export const PI = ExpoPayModule.PI;
-
-export function hello(): string {
-  return ExpoPayModule.hello();
+interface DisplayItemType {
+  label: string;
+  amount: string;
 }
 
-export async function setValueAsync(value: string) {
-  return await ExpoPayModule.setValueAsync(value);
+export interface PaymentMethodDataType {
+  merchantIdentifier?: string;
+  supportedNetworks: string[];
+  countryCode: string;
+  currencyCode: string;
 }
 
-const emitter = new EventEmitter(ExpoPayModule ?? NativeModulesProxy.ExpoPay);
-
-export function addChangeListener(listener: (event: ChangeEventPayload) => void): Subscription {
-  return emitter.addListener<ChangeEventPayload>('onChange', listener);
+export interface PaymentDetailsType {
+  id: string;
+  displayItems?: DisplayItemType[];
+  total: DisplayItemType;
 }
 
-export { ExpoPayView, ExpoPayViewProps, ChangeEventPayload };
+export const pay = (
+  methodData: PaymentMethodDataType,
+  details: PaymentDetailsType
+) => {
+  return ExpoPayModule.pay(methodData, details);
+};
