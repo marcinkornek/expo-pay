@@ -3,14 +3,14 @@ import { Button, View } from "react-native";
 
 export default function App() {
   const pay = async () => {
-    const paymentMethodData = {
+    const examplePaymentMethodData = {
       merchantIdentifier: "merchant.expo.modules.marcinkornek.pay.example",
       supportedNetworks: ["visa", "mastercard", "amex"],
       countryCode: "US",
       currencyCode: "USD",
     };
 
-    const paymentDetails = {
+    const examplePaymentDetails = {
       id: "basic-example",
       displayItems: [
         {
@@ -28,9 +28,15 @@ export default function App() {
       },
     };
 
-    const result = await ExpoPay.pay(paymentMethodData, paymentDetails);
-
-    console.log("result", result);
+    try {
+      const result = await ExpoPay.pay(
+        examplePaymentMethodData,
+        examplePaymentDetails
+      );
+      console.log("result", result);
+    } catch (error) {
+      console.log("error", error);
+    }
   };
 
   return (
